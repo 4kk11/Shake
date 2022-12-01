@@ -21,7 +21,10 @@ namespace Shake
 	{
 		private System.Threading.Timer timer = null;
 
-		private int count = 0;
+		private int tickCount = 0;
+		private int shakeInterval = 70;
+		private double shakeMinDistance = 300;
+		private double shakeFactor = 3.5;
 		private Point lastMouseLocation;
 		private Vector lastVec;
 		private Stack<MovementInfo> movementHistory;
@@ -48,45 +51,96 @@ namespace Shake
 				//int vecY = e.Location.Y - lastMouseLocation.Y;
 				//if (vecX == 0 || vecY == 0) return;
 				//Vector currentVec = new Vector() { X = vecX, Y = vecY };
-
+				
 				Vector currentVec = new Vector(lastMouseLocation, e.Location);
+				if (currentVec.X == 0 && currentVec.Y == 0) return;
+				if (lastVec == null) lastVec = currentVec;
 				if (movementHistory.Count > 0)
 				{
+					var lastMovement = movementHistory.Peek();
 					if (currentVec.signX() == lastVec.signX() && currentVec.signY() == lastVec.signY())
 					{
-						lastVec.X += currentVec.X;
-						lastVec.Y += currentVec.Y;
+						lastMovement.diff.X += currentVec.X;
+						lastMovement.diff.Y += currentVec.Y;
 					}
 					else
 					{
-						RhinoApp.WriteLine("changed movement {0}", count++);
+						//RhinoApp.WriteLine("changed movement {0}", count++);
 						//RhinoApp.WriteLine("vecX = {0}, vecY = {1}", currentVec.X, currentVec.Y);
-						movementHistory.Push(new MovementInfo() { diff = lastVec, tick = count });
+						movementHistory.Push(new MovementInfo() { diff = currentVec, tick = tickCount });
+						//RhinoApp.WriteLine(tickCount.ToString());
+						DetectShake();
 					}
+					lastVec = lastMovement.diff;
 				}
 				else
 				{
-					movementHistory.Push(new MovementInfo() { diff = lastVec, tick = count });
+					movementHistory.Push(new MovementInfo() { diff = currentVec, tick = tickCount });
 				}
 
-				//RhinoApp.WriteLine("vecX = {0}, vecY = {1}", vecX, vecY);
+				
 
 				lastMouseLocation = e.Location;
 			}
 
 		}
 
+		private void DetectShake()
+		{
+			//remove movements that started too long ago.
+			movementHistory = new Stack<MovementInfo>(movementHistory.Where(k => k.tick > (tickCount - shakeInterval)));
+			//iteration of movementHistory
+			double distanceTravelled = 0;
+			double currentX=0, minX=0, maxX=0;
+			double currentY=0, minY=0, maxY=0;
+			foreach (MovementInfo movement in movementHistory)
+			{
+				currentX += (double)movement.diff.X;
+				currentY += (double)movement.diff.Y;
+				distanceTravelled += Math.Sqrt((double)movement.diff.X* movement.diff.X + (double)movement.diff.Y*movement.diff.Y);
+				minX = Math.Min(currentX, minX);
+				maxX = Math.Max(currentX, maxX);
+				minY = Math.Min(currentY, minY);
+				maxY = Math.Max(currentY, maxY);
+				//RhinoApp.WriteLine("x = {0}, y = {1}", (double)movement.diff.X, (double)movement.diff.Y);
+			}
+			
+			if (distanceTravelled < shakeMinDistance) return;
+
+			double rectangleWidth = maxX - minX;
+			double rectangleHeight = maxY - minY;
+			double diagonal = Math.Sqrt(rectangleWidth * rectangleWidth + rectangleHeight * rectangleHeight);
+			//RhinoApp.WriteLine("travelled = {0},  diagonal = {1}, historyCount = {2}", distanceTravelled.ToString(), diagonal.ToString(), movementHistory.Count.ToString());
+			//RhinoApp.WriteLine("recW = {0}, recH = {1}", rectangleWidth.ToString(), rectangleHeight.ToString());
+			
+			
+			if (diagonal > 0 && distanceTravelled / diagonal > shakeFactor)
+			{
+				movementHistory.Clear();
+				//disconnect wire
+				DisconnectWire();
+				RhinoApp.WriteLine(distanceTravelled.ToString());
+				RhinoApp.WriteLine(diagonal.ToString());
+			}
+			
+
+		}
+		private void DisconnectWire()
+		{
+			RhinoApp.WriteLine("iiiii");
+		}
+
 		private void StartShakeMode()
 		{
 			movementHistory = new Stack<MovementInfo>();
 			isActiveShakeMode = true;
-			/*
-			RhinoApp.WriteLine("mouseDown");
+			
+			//RhinoApp.WriteLine("mouseDown");
 			TimerCallback timerDelegate = new TimerCallback(MyClock);
-			timer = new System.Threading.Timer(timerDelegate, null, 0, 100);
+			timer = new System.Threading.Timer(timerDelegate, null, 0, 1);
 			//timer.Tick += TickTimer;
 			//timer.Start();
-			*/
+			
 		}
 
 		private void EndShakeMode()
@@ -94,22 +148,17 @@ namespace Shake
 			movementHistory.Clear();
 			isActiveShakeMode = false;
 
-			count = 0;
+			tickCount = 0;
 			lastVec.X = 0;
 			lastVec.Y = 0;
-			/*
-			RhinoApp.WriteLine("mouseUp");
+			
 			if (timer != null)
 			{
-				//RhinoApp.WriteLine(count.ToString());
-				//timer.Stop();
 				timer.Change(Timeout.Infinite, Timeout.Infinite);
-				count = 0;
-
 				timer.Dispose();
 				timer = null;
 			}
-			*/
+			
 		}
 
 		private void Canvas_MouseDown(object sender, MouseEventArgs e)
@@ -131,18 +180,19 @@ namespace Shake
 
 		private void TickTimer(object sender, EventArgs e)
 		{
-			count++;
+			tickCount++;
 		}
 
 		private void MyClock(object o)
 		{
 			
-			count++;
-			RhinoApp.WriteLine(count.ToString());
+			tickCount++;
+			//RhinoApp.WriteLine(tickCount.ToString());
+			//RhinoApp.WriteLine("historyCount = {0}", movementHistory.Count);
 		}
 	}
 
-	public struct Vector
+	public class Vector
 	{
 		public int X;
 		public int Y;
@@ -150,10 +200,11 @@ namespace Shake
 		public Vector(Point ptA, Point ptB)
 		{ 
 			X = ptB.X - ptA.X;
-			Y = ptB.X - ptA.X;
+			Y = ptB.Y - ptA.Y;
 		}
 		public int signX()
 		{
+
 			return Math.Sign(X);
 		}
 
@@ -164,7 +215,7 @@ namespace Shake
 
 	}
 
-	public struct MovementInfo
+	public class MovementInfo
 	{
 		public Vector diff;
 		public int tick;
