@@ -21,17 +21,15 @@ namespace Shake
 	{
 		public override GH_LoadingInstruction PriorityLoad()
 		{
-			Instances.CanvasCreated += Append__Interaction;
+			Instances.CanvasCreated += Append_Interaction;
 			return GH_LoadingInstruction.Proceed;
 		}
 
-		private void Append__Interaction(GH_Canvas canvas)
+		private void Append_Interaction(GH_Canvas canvas)
 		{ 
-			Instances.CanvasCreated -= Append__Interaction;
-			//Instances.ActiveCanvas.MouseMove += Shake.Canvas_MouseMove;
+			Instances.CanvasCreated -= Append_Interaction;
 			var shake = new Shake(Instances.ActiveCanvas);
-			//Instances.DocumentEditor.MouseDown += Shake.Canvas_MouseDown;
-			//Instances.DocumentEditor.MouseUp += Shake.Canvas_MouseUp;
+			ToolbarItems.RegisterToolMenuItem();
 		}
 
 	}

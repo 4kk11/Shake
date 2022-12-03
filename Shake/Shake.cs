@@ -22,14 +22,16 @@ namespace Shake
 		private System.Threading.Timer timer = null;
 
 		private int tickCount = 0;
-		private int shakeInterval = 70;
-		private double shakeMinDistance = 300;
-		private double shakeFactor = 3.5;
+		private const int shakeInterval = 50;
+		private const double shakeMinDistance = 300;
+		private const double shakeFactor = 4.0;
 		private Point lastMouseLocation;
 		private Vector lastVec;
 		private Stack<MovementInfo> movementHistory;
-
+		private GH_DragInteraction _DragInteraction;
 		private bool isActiveShakeMode;
+
+		public static bool enableShake = true;
 
 		private GH_Canvas canvas;
 		public Shake(GH_Canvas _canvas)
@@ -38,20 +40,12 @@ namespace Shake
 			canvas.MouseMove += Canvas_MouseMove;
 			canvas.MouseDown += Canvas_MouseDown;
 			canvas.MouseUp += Canvas_MouseUp;
-
-
 		}
 
 		private void Canvas_MouseMove(object sender, MouseEventArgs e)
 		{
-			if (isActiveShakeMode)
-			{
-				//RhinoApp.WriteLine(e.Location.ToString());
-				//int vecX = e.Location.X - lastMouseLocation.X;
-				//int vecY = e.Location.Y - lastMouseLocation.Y;
-				//if (vecX == 0 || vecY == 0) return;
-				//Vector currentVec = new Vector() { X = vecX, Y = vecY };
-				
+			if (isActiveShakeMode && enableShake)
+			{	
 				Vector currentVec = new Vector(lastMouseLocation, e.Location);
 				if (currentVec.X == 0 && currentVec.Y == 0) return;
 				if (lastVec == null) lastVec = currentVec;
@@ -68,7 +62,6 @@ namespace Shake
 						//RhinoApp.WriteLine("changed movement {0}", count++);
 						//RhinoApp.WriteLine("vecX = {0}, vecY = {1}", currentVec.X, currentVec.Y);
 						movementHistory.Push(new MovementInfo() { diff = currentVec, tick = tickCount });
-						//RhinoApp.WriteLine(tickCount.ToString());
 						DetectShake();
 					}
 					lastVec = lastMovement.diff;
@@ -77,8 +70,6 @@ namespace Shake
 				{
 					movementHistory.Push(new MovementInfo() { diff = currentVec, tick = tickCount });
 				}
-
-				
 
 				lastMouseLocation = e.Location;
 			}
@@ -102,7 +93,6 @@ namespace Shake
 				maxX = Math.Max(currentX, maxX);
 				minY = Math.Min(currentY, minY);
 				maxY = Math.Max(currentY, maxY);
-				//RhinoApp.WriteLine("x = {0}, y = {1}", (double)movement.diff.X, (double)movement.diff.Y);
 			}
 			
 			if (distanceTravelled < shakeMinDistance) return;
@@ -119,39 +109,73 @@ namespace Shake
 				movementHistory.Clear();
 				//disconnect wire
 				DisconnectWire();
-				RhinoApp.WriteLine(distanceTravelled.ToString());
-				RhinoApp.WriteLine(diagonal.ToString());
 			}
 			
 
 		}
 		private void DisconnectWire()
 		{
-			RhinoApp.WriteLine("iiiii");
+			//Get dragged objects
+			IEnumerable<IGH_DocumentObject> objs = GetDraggedObjects();
+			if (objs.Count() == 1)
+			{
+				IGH_DocumentObject obj = objs.ElementAt(0);
+				if (obj is IGH_Param param)
+				{
+					bool isSingleSource = param.SourceCount == 1;
+					foreach (IGH_Param recip in param.Recipients.ToList())
+					{
+						if (isSingleSource)
+						{
+							recip.Sources.Add(param.Sources[0]);
+						}
+						recip.RemoveSource(param);
+					}
+
+					param.RemoveAllSources();
+
+					param.ExpireSolution(true);
+				}
+				else if (obj is IGH_Component comp)
+				{ 
+					
+				}
+			}
+
 		}
 
-		private void StartShakeMode()
+		private IEnumerable<IGH_DocumentObject> GetDraggedObjects()
 		{
+			IEnumerable<IGH_Attributes> atts = typeof(GH_DragInteraction).GetField("m_att", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+																		 .GetValue(_DragInteraction) as IEnumerable<IGH_Attributes>;
+			return atts.Select(att => att.DocObject);
+		}
+
+		private void StartShakeMode(GH_DragInteraction dragInteraction)
+		{
+			//create movement history
 			movementHistory = new Stack<MovementInfo>();
+			//enable ShakeMode
 			isActiveShakeMode = true;
-			
-			//RhinoApp.WriteLine("mouseDown");
+			//set active DragInteraction
+			_DragInteraction = dragInteraction;
+			//set timer
 			TimerCallback timerDelegate = new TimerCallback(MyClock);
 			timer = new System.Threading.Timer(timerDelegate, null, 0, 1);
-			//timer.Tick += TickTimer;
-			//timer.Start();
-			
 		}
 
 		private void EndShakeMode()
 		{
+			//reset movement history
 			movementHistory.Clear();
+			//disable ShakeMode
 			isActiveShakeMode = false;
-
+			//reset active DragInteraction
+			_DragInteraction = null;
+			//reset data
 			tickCount = 0;
-			lastVec.X = 0;
-			lastVec.Y = 0;
-			
+			lastVec = null;
+			//reset timer
 			if (timer != null)
 			{
 				timer.Change(Timeout.Infinite, Timeout.Infinite);
@@ -163,32 +187,24 @@ namespace Shake
 
 		private void Canvas_MouseDown(object sender, MouseEventArgs e)
 		{
-			if (canvas.ActiveInteraction is GH_DragInteraction)
+			if (canvas.ActiveInteraction is GH_DragInteraction dragInteraction && enableShake)
 			{
-				StartShakeMode();
+				StartShakeMode(dragInteraction);
 			}
 		}
 
 		private void Canvas_MouseUp(object sender, MouseEventArgs e)
 		{
 
-			if (isActiveShakeMode)
+			if (isActiveShakeMode && enableShake)
 			{
 				EndShakeMode();
 			}
 		}
 
-		private void TickTimer(object sender, EventArgs e)
-		{
-			tickCount++;
-		}
-
 		private void MyClock(object o)
 		{
-			
 			tickCount++;
-			//RhinoApp.WriteLine(tickCount.ToString());
-			//RhinoApp.WriteLine("historyCount = {0}", movementHistory.Count);
 		}
 	}
 
