@@ -14,6 +14,7 @@ using System.Threading;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
+using Grasshopper.Kernel.Undo;
 
 namespace Shake
 {
@@ -59,8 +60,6 @@ namespace Shake
 					}
 					else
 					{
-						//RhinoApp.WriteLine("changed movement {0}", count++);
-						//RhinoApp.WriteLine("vecX = {0}, vecY = {1}", currentVec.X, currentVec.Y);
 						movementHistory.Push(new MovementInfo() { diff = currentVec, tick = tickCount });
 						DetectShake();
 					}
@@ -80,7 +79,7 @@ namespace Shake
 		{
 			//remove movements that started too long ago.
 			movementHistory = new Stack<MovementInfo>(movementHistory.Where(k => k.tick > (tickCount - shakeInterval)));
-			//iteration of movementHistory
+			//iteration in movementHistory
 			double distanceTravelled = 0;
 			double currentX=0, minX=0, maxX=0;
 			double currentY=0, minY=0, maxY=0;
@@ -97,12 +96,10 @@ namespace Shake
 			
 			if (distanceTravelled < shakeMinDistance) return;
 
+			//calculate diagonal
 			double rectangleWidth = maxX - minX;
 			double rectangleHeight = maxY - minY;
-			double diagonal = Math.Sqrt(rectangleWidth * rectangleWidth + rectangleHeight * rectangleHeight);
-			//RhinoApp.WriteLine("travelled = {0},  diagonal = {1}, historyCount = {2}", distanceTravelled.ToString(), diagonal.ToString(), movementHistory.Count.ToString());
-			//RhinoApp.WriteLine("recW = {0}, recH = {1}", rectangleWidth.ToString(), rectangleHeight.ToString());
-			
+			double diagonal = Math.Sqrt(rectangleWidth * rectangleWidth + rectangleHeight * rectangleHeight);		
 			
 			if (diagonal > 0 && distanceTravelled / diagonal > shakeFactor)
 			{
@@ -115,6 +112,9 @@ namespace Shake
 		}
 		private void DisconnectWire()
 		{
+			GH_Document doc = Instances.ActiveCanvas.Document;
+			//create undo actions
+			List<IGH_UndoAction> undoActions = new List<IGH_UndoAction>();
 			//Get dragged objects
 			IEnumerable<IGH_DocumentObject> objs = GetDraggedObjects();
 			if (objs.Count() == 1)
@@ -127,19 +127,37 @@ namespace Shake
 					{
 						if (isSingleSource)
 						{
+							undoActions.AddRange(doc.UndoUtil.CreateWireEvent("Add recipient source", recip).Actions);
 							recip.Sources.Add(param.Sources[0]);
+							param.Sources[0].Recipients.Add(recip);
 						}
+						undoActions.AddRange(doc.UndoUtil.CreateWireEvent("Remove recipient source", recip).Actions);
 						recip.RemoveSource(param);
 					}
-
+					undoActions.AddRange(doc.UndoUtil.CreateWireEvent("Remove sources", param).Actions);
+					
 					param.RemoveAllSources();
-
-					param.ExpireSolution(true);
 				}
 				else if (obj is IGH_Component comp)
-				{ 
-					
+				{
+					//input 
+					foreach (IGH_Param input in comp.Params.Input)
+					{
+						undoActions.AddRange(doc.UndoUtil.CreateWireEvent("Remove sources", input).Actions);
+						input.RemoveAllSources();
+					}
+					//output
+					foreach (IGH_Param output in comp.Params.Output)
+					{
+						foreach (IGH_Param recip in output.Recipients.ToList())
+						{
+							undoActions.AddRange(doc.UndoUtil.CreateWireEvent("Remove recipient source", recip).Actions);
+							recip.RemoveSource(output);
+						}
+					}
 				}
+				doc.UndoUtil.RecordEvent("Shake", undoActions);
+				obj.ExpireSolution(true);
 			}
 
 		}

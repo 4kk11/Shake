@@ -15,7 +15,7 @@ namespace Shake
 		public static void RegisterToolMenuItem()
 		{
 			//create button
-			ToolStripButton toolbarItem = new ToolStripButton();
+			ToolStripButton toolbarItem = new ToolStripButton(Properties.Resources.ShakeIcon_24);
 			toolbarItem.ToolTipText = "Enable Shake";
 			toolbarItem.Checked = true;
 			toolbarItem.Click += (sender, e) =>
