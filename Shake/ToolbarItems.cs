@@ -10,18 +10,18 @@ using Grasshopper.GUI;
 
 namespace Shake
 {
-	static class ToolbarItems
+	class ToolbarItems
 	{
 		public static void RegisterToolMenuItem()
 		{
 			//create button
 			ToolStripButton toolbarItem = new ToolStripButton(Properties.Resources.ShakeIcon_24);
 			toolbarItem.ToolTipText = "Enable Shake";
-			toolbarItem.Checked = true;
+			toolbarItem.Checked = Settings.EnableShake;
 			toolbarItem.Click += (sender, e) =>
 			{
 				toolbarItem.Checked = !toolbarItem.Checked;
-				Shake.enableShake = !Shake.enableShake;
+				Settings.EnableShake = !Settings.EnableShake;
 			};
 			//add to canvas toolbar
 			ToolStrip canvasToolbar = Instances.DocumentEditor.Controls[0].Controls[1] as ToolStrip;

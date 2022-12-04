@@ -12,8 +12,6 @@ using Rhino;
 using System.Windows.Forms;
 using System.Threading;
 using System.Drawing;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
 using Grasshopper.Kernel.Undo;
 
 namespace Shake
@@ -31,9 +29,6 @@ namespace Shake
 		private Stack<MovementInfo> movementHistory;
 		private GH_DragInteraction _DragInteraction;
 		private bool isActiveShakeMode;
-
-		public static bool enableShake = true;
-
 		private GH_Canvas canvas;
 		public Shake(GH_Canvas _canvas)
 		{
@@ -45,7 +40,7 @@ namespace Shake
 
 		private void Canvas_MouseMove(object sender, MouseEventArgs e)
 		{
-			if (isActiveShakeMode && enableShake)
+			if (isActiveShakeMode && Settings.EnableShake)
 			{	
 				Vector currentVec = new Vector(lastMouseLocation, e.Location);
 				if (currentVec.X == 0 && currentVec.Y == 0) return;
@@ -69,7 +64,6 @@ namespace Shake
 				{
 					movementHistory.Push(new MovementInfo() { diff = currentVec, tick = tickCount });
 				}
-
 				lastMouseLocation = e.Location;
 			}
 
@@ -199,13 +193,12 @@ namespace Shake
 				timer.Change(Timeout.Infinite, Timeout.Infinite);
 				timer.Dispose();
 				timer = null;
-			}
-			
+			}	
 		}
 
 		private void Canvas_MouseDown(object sender, MouseEventArgs e)
 		{
-			if (canvas.ActiveInteraction is GH_DragInteraction dragInteraction && enableShake)
+			if (canvas.ActiveInteraction is GH_DragInteraction dragInteraction && Settings.EnableShake)
 			{
 				StartShakeMode(dragInteraction);
 			}
@@ -213,8 +206,7 @@ namespace Shake
 
 		private void Canvas_MouseUp(object sender, MouseEventArgs e)
 		{
-
-			if (isActiveShakeMode && enableShake)
+			if (isActiveShakeMode && Settings.EnableShake)
 			{
 				EndShakeMode();
 			}
